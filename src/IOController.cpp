@@ -63,6 +63,15 @@ void IOController::executeCommand(const std::string& command, SimEngine& engine)
         } else {
             std::cerr << "Format error. Usage: set <wire> <value> at <time>\n";
         }
+    } else if (token == "run") {
+        uint64_t step_time;
+        if (iss >> step_time) {
+            uint64_t target = engine.getCurrentTime() + step_time;
+            engine.stepTo(target);
+            std::cout << "Advanced simulation to " << target << "ns\n";
+        } else {
+            std::cerr << "Format error. Usage: run <nanoseconds>\n";
+        }
     } else {
         std::cerr << "Command not recognized: '" << token << "'\n";
     }
@@ -104,6 +113,10 @@ void IOController::exportVCD(const std::string& filename, const Netlist& netlist
     vcd_file << "$dumpvars\n";
 
     std::map<Wire*, LogicState> current_states;
+    for (const auto& wire_ptr : netlist.wires) {
+        current_states[wire_ptr.get()] = LogicState::X;
+    }
+
     std::map<uint64_t, std::vector<Event>> events_by_time;
     for (const auto& ev : history) {
         events_by_time[ev.timestamp].push_back(ev);
