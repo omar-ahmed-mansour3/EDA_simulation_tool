@@ -11,7 +11,13 @@ enum class GateType {
     NOR,
     XOR,
     XNOR,
-    BUF
+    BUF,
+    EQ,          // a == b (logical equality)
+    CASE_EQ,     // a === b (case equality)
+    NE,          // a != b (logical inequality)
+    CASE_NE,     // a !== b (case inequality)
+    LOGICAL_AND, // a && b
+    LOGICAL_OR   // a || b
 };
 
 struct ParsedGate {
