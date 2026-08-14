@@ -1,6 +1,7 @@
 #include "Netlist.hpp"
 #include <stdexcept>
 #include <utility>
+#include <unordered_map>
 
 namespace {
 
@@ -54,7 +55,6 @@ bool drivesItsOwnInput(const Gate* g) {
 }
 
 // walks the gates depth first looking for a loop with no gate in between.
-// person 3 would never finish simulating one of these.
 bool hasCombinationalLoop(const Netlist& n) {
     std::unordered_map<const Gate*, int> colour;   // 0 new, 1 on the stack, 2 done
     for (const auto& g : n.gates) colour[g.get()] = 0;
@@ -121,18 +121,53 @@ LogicState Gate::evaluate() const {
     if (inputs.empty()) return LogicState::X;
 
     switch (type) {
-        case GateType::AND:  return andOf(inputs);
-        case GateType::NAND: return invert(andOf(inputs));
-        case GateType::OR:   return orOf(inputs);
-        case GateType::NOR:  return invert(orOf(inputs));
-        case GateType::XOR:  return xorOf(inputs);
-        case GateType::XNOR: return invert(xorOf(inputs));
-        case GateType::NOT:  return invert(inputs[0]->current_state);
-        case GateType::BUF:  return isKnown(inputs[0]->current_state)
-                                        ? inputs[0]->current_state
-                                        : LogicState::X;
+        case GateType::AND:         return andOf(inputs);
+        case GateType::NAND:        return invert(andOf(inputs));
+        case GateType::OR:          return orOf(inputs);
+        case GateType::NOR:         return invert(orOf(inputs));
+        case GateType::XOR:         return xorOf(inputs);
+        case GateType::XNOR:        return invert(xorOf(inputs));
+        case GateType::NOT:         return invert(inputs[0]->current_state);
+        case GateType::BUF:         return isKnown(inputs[0]->current_state)
+                                                ? inputs[0]->current_state
+                                                : LogicState::X;
+
+        case GateType::EQ: { // a == b (logical equality)
+            if (inputs.size() < 2) return LogicState::X;
+            LogicState s1 = inputs[0]->current_state;
+            LogicState s2 = inputs[1]->current_state;
+            if (!isKnown(s1) || !isKnown(s2)) return LogicState::X;
+            return (s1 == s2) ? LogicState::ONE : LogicState::ZERO;
+        }
+
+        case GateType::CASE_EQ: { // a === b (case equality: exact state match)
+            if (inputs.size() < 2) return LogicState::X;
+            LogicState s1 = inputs[0]->current_state;
+            LogicState s2 = inputs[1]->current_state;
+            return (s1 == s2) ? LogicState::ONE : LogicState::ZERO;
+        }
+
+        case GateType::NE: { // a != b (logical inequality)
+            if (inputs.size() < 2) return LogicState::X;
+            LogicState s1 = inputs[0]->current_state;
+            LogicState s2 = inputs[1]->current_state;
+            if (!isKnown(s1) || !isKnown(s2)) return LogicState::X;
+            return (s1 != s2) ? LogicState::ONE : LogicState::ZERO;
+        }
+
+        case GateType::CASE_NE: { // a !== b (case inequality: exact state mismatch)
+            if (inputs.size() < 2) return LogicState::X;
+            LogicState s1 = inputs[0]->current_state;
+            LogicState s2 = inputs[1]->current_state;
+            return (s1 != s2) ? LogicState::ONE : LogicState::ZERO;
+        }
+
+        case GateType::LOGICAL_AND: return andOf(inputs);
+        case GateType::LOGICAL_OR:  return orOf(inputs);
+
+        default:
+            return LogicState::X;
     }
-    return LogicState::X;
 }
 
 Wire* Netlist::getOrCreateWire(const std::string& name) {
@@ -142,6 +177,7 @@ Wire* Netlist::getOrCreateWire(const std::string& name) {
     wires.push_back(std::make_unique<Wire>());
     Wire* w = wires.back().get();
     w->name = name;
+    w->current_state = LogicState::X;
     wire_map[name] = w;
     return w;
 }
