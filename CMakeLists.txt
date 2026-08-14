@@ -5,11 +5,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # --- Source files ---
-# Add Parser.cpp and IOController.cpp here as each person finishes their module
 add_executable(EDA_SimEngine
     src/main.cpp
     src/Netlist.cpp
     src/SimEngine.cpp
+    src/Parser.cpp
+    src/Tokenizer.cpp
+    src/ASTNode.cpp
+    src/FileReader.cpp
+    src/IOController.cpp
 )
 
 # --- Include paths ---

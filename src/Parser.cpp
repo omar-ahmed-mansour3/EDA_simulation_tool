@@ -1,13 +1,19 @@
 //
 // Created by omara on 8/4/2026.
 //
-#include "Parser.h"
+#include "Parser.hpp"
 #include "ASTNode.h"
+#include "FileReader.h"
+#include "Tokenizer.h"
 #include <string>
 #include <stdexcept>
 #include <iostream>
-#include "Tokenizer.h"
 using namespace std;
+
+ParsedModule VerilogParser::parseFile(const string& filepath) {
+    string content = FileReader::readFile(filepath);
+    return parseString(content);
+}
 
 ParsedModule VerilogParser::parseString(const string& verilog_code) {
     vector<Token> tokens = Tokenizer::tokenize(verilog_code);
@@ -281,8 +287,7 @@ ParsedModule VerilogParser::parseFromTokens(const vector<Token>& tokens) {
 
         }
 
-         parserError(tokens[current],"Missing 'endmodule'");
-
+         throw runtime_error("Parser error: Missing 'endmodule'");
     }
 
 void VerilogParser::evaluate(ASTNode* node, vector<ParsedGate>& gates, vector<string>& wires, int& wireCounter, int& gateCounter) {
@@ -368,6 +373,7 @@ void VerilogParser::evaluate(ASTNode* node, vector<ParsedGate>& gates, vector<st
         case GateType::XOR:  gateName = "xor"; break;
         case GateType::XNOR: gateName = "xnor"; break;
         case GateType::BUF:  gateName = "buf"; break;
+        default:             gateName = "gate"; break;
     }
 
     gate.instance_name = gateName + to_string(gateCounter++);
