@@ -58,8 +58,9 @@ void IOController::executeCommand(const std::string& command, SimEngine& engine)
         // Parsing "set <wire> <val> at <time>"
         if (iss >> wire_name >> val >> at_keyword >> time && at_keyword == "at") {
             LogicState state = charToLogicState(val);
-            engine.injectEventByName(time, wire_name, state);
-            std::cout << "Event injected: " << wire_name << " = " << val << " at " << time << "ns\n";
+            if (engine.injectEventByName(time, wire_name, state)) {
+                std::cout << "Event injected: " << wire_name << " = " << val << " at " << time << "ns\n";
+            }
         } else {
             std::cerr << "Format error. Usage: set <wire> <value> at <time>\n";
         }
@@ -72,8 +73,42 @@ void IOController::executeCommand(const std::string& command, SimEngine& engine)
         } else {
             std::cerr << "Format error. Usage: run <nanoseconds>\n";
         }
+    } else if (token == "export" || token == "export_vcd") {
+        std::string filename;
+        if (iss >> filename) {
+            if (engine.getNetlist()) {
+                exportVCD(filename, *engine.getNetlist(), engine.getHistory());
+            } else {
+                std::cerr << "Error: Netlist is null, cannot export VCD.\n";
+            }
+        } else {
+            std::cerr << "Format error. Usage: export <filename.vcd>\n";
+        }
+    } else if (token == "status" || token == "show") {
+        std::cout << "Current Simulation Time: " << engine.getCurrentTime() << "ns\n";
+        if (engine.getNetlist()) {
+            std::cout << "Netlist Wires:\n";
+            for (const auto& w : engine.getNetlist()->wires) {
+                char s = logicStateToChar(w->current_state);
+                std::cout << "  - " << std::left << std::setw(15) << w->name << " : state = " << s << "\n";
+            }
+        }
+    } else if (token == "help") {
+        std::cout << "======================================================================\n";
+        std::cout << "               EDA SIMULATION ENGINE CLI HELP                         \n";
+        std::cout << "======================================================================\n";
+        std::cout << "  set <wire> <val> at <time>  : Inject signal change (val: 0, 1, x, z)\n";
+        std::cout << "                                Example: set a 1 at 0\n";
+        std::cout << "  run <nanoseconds>           : Advance simulation time\n";
+        std::cout << "                                Example: run 10\n";
+        std::cout << "  export <filename.vcd>       : Export simulation history to IEEE 1364 VCD\n";
+        std::cout << "                                Example: export wave.vcd\n";
+        std::cout << "  status                      : Display current simulation time and signal states\n";
+        std::cout << "  help                        : Print this help message\n";
+        std::cout << "  exit / quit                 : Exit interactive CLI session\n";
+        std::cout << "======================================================================\n";
     } else {
-        std::cerr << "Command not recognized: '" << token << "'\n";
+        std::cerr << "Command not recognized: '" << token << "'. Type 'help' for available commands.\n";
     }
 }
 

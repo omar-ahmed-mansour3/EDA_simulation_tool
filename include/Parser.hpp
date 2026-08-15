@@ -27,7 +27,7 @@ struct ParsedGate {
     GateType type;
     std::string type_name;            // Primitive name (e.g., "and", "assign")
     std::string instance_name;        // Gate instance identifier (e.g., "g1")
-    int delay = 1;                    // Default gate delay
+    int delay = 1;                    // Default gate delay (1ns)
     std::vector<std::string> inputs;  // Input wire names
     std::string output;               // Output wire name
 };

@@ -1,10 +1,11 @@
 // main.cpp
-// Automated Test Harness for Person 4: IOController CLI Commands
+// Entry point for EDA Simulation Engine & Waveform GUI
 
 #include "Parser.hpp"
 #include "Netlist.hpp"
 #include "SimEngine.hpp"
 #include "IOController.hpp"
+#include "WaveformGUI.hpp"
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -20,56 +21,37 @@ static std::string stateToString(LogicState s) {
     }
 }
 
-int main() {
+static void runCliTestSuite(SimEngine& engine) {
     std::cout << "======================================================================\n";
     std::cout << "        PERSON 4: IOCONTROLLER CLI COMMAND TEST SUITE                 \n";
     std::cout << "======================================================================\n\n";
 
-    std::string verilog_input = 
-        "module cli_test(input in1, input in2, output out);\n"
-        "    assign out = in1 | in2;\n"
-        "endmodule\n";
-
-    // Setup Circuit
-    ParsedModule parsed = VerilogParser::parseString(verilog_input);
-    Netlist netlist;
-    netlist.buildGraph(parsed);
-    SimEngine engine(&netlist);
-
     std::cout << "[EXECUTING CLI COMMAND SEQUENCE]\n";
     std::cout << "----------------------------------------------------------------------\n";
 
-    // Command 1
     std::cout << "Command 1: 'set in1 1 at 0'\n   -> Actual Output: ";
     IOController::executeCommand("set in1 1 at 0", engine);
 
-    // Command 2
     std::cout << "Command 2: 'set in2 0 at 0'\n   -> Actual Output: ";
     IOController::executeCommand("set in2 0 at 0", engine);
 
-    // Command 3
     std::cout << "Command 3: 'run 5'\n   -> Actual Output: ";
     IOController::executeCommand("run 5", engine);
 
-    // Command 4
     std::cout << "Command 4: 'set in1 0 at 5'\n   -> Actual Output: ";
     IOController::executeCommand("set in1 0 at 5", engine);
 
-    // Command 5
     std::cout << "Command 5: 'run 5'\n   -> Actual Output: ";
     IOController::executeCommand("run 5", engine);
 
-    // Command 6 (Error case: invalid wire)
     std::cout << "Command 6: 'set bad_wire 1 at 10' (Invalid Wire Test)\n   -> Actual Output: ";
     IOController::executeCommand("set bad_wire 1 at 10", engine);
 
-    // Command 7 (Error case: invalid command)
     std::cout << "Command 7: 'foobar 123' (Invalid Command Test)\n   -> Actual Output: ";
     IOController::executeCommand("foobar 123", engine);
 
     std::cout << "----------------------------------------------------------------------\n\n";
 
-    // Compare Logged History Against Expectations
     std::cout << "[VERIFYING WAVEFORM HISTORY AFTER CLI EXECUTION]\n";
     std::cout << std::left << std::setw(12) << "Timestamp" << std::setw(14) << "Wire" << "New State\n";
     std::cout << std::string(36, '-') << "\n";
@@ -81,7 +63,6 @@ int main() {
                   << stateToString(ev.new_state) << "\n";
     }
 
-    // Checking expectations
     bool check1 = false, check2 = false, check3 = false, check4 = false, check5 = false;
 
     for (const auto& ev : engine.getHistory()) {
@@ -108,6 +89,119 @@ int main() {
         std::cout << "  CLI TEST FAILED! ❌\n";
     }
     std::cout << "======================================================================\n";
+}
+
+int main(int argc, char* argv[]) {
+    std::string verilog_filepath = "";
+    bool run_unit_test = false;
+    bool interactive_cli = false;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--test") {
+            run_unit_test = true;
+        } else if (arg == "--cli" || arg == "-i") {
+            interactive_cli = true;
+        } else if (arg.rfind("-", 0) != 0 && verilog_filepath.empty()) {
+            verilog_filepath = arg;
+        }
+    }
+
+    ParsedModule parsed;
+    if (run_unit_test) {
+        std::string verilog_input = 
+            "module cli_test(input in1, input in2, output out);\n"
+            "    assign out = in1 | in2;\n"
+            "endmodule\n";
+        parsed = VerilogParser::parseString(verilog_input);
+    } else if (!verilog_filepath.empty()) {
+        try {
+            std::cout << "[INFO] Loading Verilog file: " << verilog_filepath << "\n";
+            parsed = VerilogParser::parseFile(verilog_filepath);
+        } catch (const std::exception& ex) {
+            std::cerr << "[ERROR] Failed to parse Verilog file '" << verilog_filepath << "': " << ex.what() << "\n";
+            return 1;
+        }
+    } else {
+        std::string default_file = "multi_input_logic.v";
+        try {
+            std::cout << "[INFO] No Verilog file specified. Loading default file '" << default_file << "'...\n";
+            parsed = VerilogParser::parseFile(default_file);
+        } catch (const std::exception& ex) {
+            std::cout << "[INFO] File load failed (" << ex.what() << "), using embedded string parsing...\n";
+            std::string verilog_input = 
+                "module multi_input_logic(input a, input b, input c, input d, input e, input f, output out);\n"
+                "    wire w1, w2;\n"
+                "    assign w1 = a & b & c;\n"
+                "    assign w2 = d & e & f;\n"
+                "    assign out = w1 ^ w2;\n"
+                "endmodule\n";
+            parsed = VerilogParser::parseString(verilog_input);
+        }
+    }
+
+    Netlist netlist;
+    netlist.buildGraph(parsed);
+    SimEngine engine(&netlist);
+
+    if (run_unit_test) {
+        runCliTestSuite(engine);
+        return 0;
+    }
+
+    if (interactive_cli) {
+        std::cout << "======================================================================\n";
+        std::cout << "        EDA SIMULATION ENGINE INTERACTIVE CLI MODE                    \n";
+        std::cout << "======================================================================\n";
+        std::cout << "Module: " << parsed.module_name << "\n";
+        std::cout << "Inputs : ";
+        for (const auto& pin : parsed.input_pins) std::cout << pin << " ";
+        std::cout << "\nOutputs: ";
+        for (const auto& pin : parsed.output_pins) std::cout << pin << " ";
+        std::cout << "\nType 'help' for command usage or 'exit' / 'quit' to exit.\n";
+        std::cout << "----------------------------------------------------------------------\n";
+
+        std::string line;
+        while (true) {
+            std::cout << "EDA-SimEngine> ";
+            if (!std::getline(std::cin, line)) break;
+            if (line == "exit" || line == "quit") break;
+            if (line.empty()) continue;
+            IOController::executeCommand(line, engine);
+        }
+        return 0;
+    }
+
+    std::cout << "======================================================================\n";
+    std::cout << "        EDA SIMULATION ENGINE - WAVEFORM GUI MODE                     \n";
+    std::cout << "======================================================================\n";
+    std::cout << "Loaded Module: " << parsed.module_name << "\n";
+    std::cout << "Inputs : ";
+    for (const auto& pin : parsed.input_pins) {
+        std::cout << pin << " ";
+        IOController::executeCommand("set " + pin + " 0 at 0", engine);
+    }
+    std::cout << "\nOutputs: ";
+    for (const auto& pin : parsed.output_pins) std::cout << pin << " ";
+    std::cout << "\n----------------------------------------------------------------------\n";
+    std::cout << "[RUNTIME CONTROL INSTRUCTIONS]\n";
+    std::cout << "  1. Type CLI commands directly in this CMD window OR in the GUI text box!\n";
+    std::cout << "  2. Example commands to try during runtime:\n";
+    std::cout << "       set a 1 at 5\n";
+    std::cout << "       set b 1 at 5\n";
+    std::cout << "       set c 1 at 5\n";
+    std::cout << "       run 10\n";
+    std::cout << "       set d 1 at 15\n";
+    std::cout << "       set e 1 at 15\n";
+    std::cout << "       set f 1 at 15\n";
+    std::cout << "       run 10\n";
+    std::cout << "       status\n";
+    std::cout << "======================================================================\n\n";
+
+    IOController::executeCommand("run 0", engine);
+
+    std::cout << "Launching EDA Waveform GUI...\n";
+    WaveformGUI::runApplication(&engine);
 
     return 0;
 }

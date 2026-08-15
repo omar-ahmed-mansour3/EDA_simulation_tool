@@ -18,12 +18,13 @@ public:
 
     // Inject runtime events into the priority queue
     void injectEvent(uint64_t time, Wire* wire, LogicState state);
-    void injectEventByName(uint64_t time, const std::string& wire_name, LogicState state);
+    bool injectEventByName(uint64_t time, const std::string& wire_name, LogicState state);
 
     // Processes the time_wheel queue up to target_time with max event loop guard
     bool stepTo(uint64_t target_time, size_t max_events = 50000);
 
     const std::vector<Event>& getHistory() const { return simulation_history; }
     uint64_t getCurrentTime() const { return current_time; }
+    Netlist* getNetlist() const { return netlist; }
     void reset();
 };
