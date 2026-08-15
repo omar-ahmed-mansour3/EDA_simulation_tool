@@ -217,24 +217,9 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "\nOutputs: ";
     for (const auto& pin : parsed.output_pins) std::cout << pin << " ";
-    std::cout << "\n----------------------------------------------------------------------\n";
-
-    // Dynamic pre-population logic: only run demo if pins 'a' and 'b' exist
-    bool has_a = std::find(parsed.input_pins.begin(), parsed.input_pins.end(), "a") != parsed.input_pins.end();
-    bool has_b = std::find(parsed.input_pins.begin(), parsed.input_pins.end(), "b") != parsed.input_pins.end();
-
-    if (has_a && has_b) {
-        std::cout << "[PRE-POPULATING PROPAGATION DELAY DEMO SEQUENCE]\n";
-        IOController::executeCommand("set a 1 at 0", engine);
-        IOController::executeCommand("set b 1 at 0", engine);
-        IOController::executeCommand("run 5", engine);
-        IOController::executeCommand("set a 0 at 5", engine);
-        IOController::executeCommand("run 5", engine);
-        std::cout << "----------------------------------------------------------------------\n";
-    } else {
-        // General initial run for any loaded module
-        IOController::executeCommand("run 10", engine);
-    }
+    // Initial evaluation at t=0ns
+    IOController::executeCommand("run 0", engine);
+    std::cout << "----------------------------------------------------------------------\n";
 
     std::cout << "[RUNTIME CONTROL INSTRUCTIONS]\n";
     std::cout << "  Type commands directly using the GUI control box!\n";
