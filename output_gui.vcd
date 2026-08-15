@@ -1,0 +1,46 @@
+$date 2026-08-15 $end
+$version EDA Simulator $end
+$timescale 1ns $end
+$scope module top $end
+$var wire 1 ! a $end
+$var wire 1 " b $end
+$var wire 1 # cin $end
+$var wire 1 $ sum $end
+$var wire 1 % cout $end
+$var wire 1 & w1 $end
+$var wire 1 ' w2 $end
+$var wire 1 ( w3 $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpvars
+0#
+1!
+x$
+x%
+1"
+x'
+x(
+x&
+$end
+#1
+0'
+0&
+0(
+1&
+0&
+1'
+#2
+0$
+0%
+1$
+0$
+1%
+#5
+0!
+#6
+1&
+0'
+#7
+1$
+0%
