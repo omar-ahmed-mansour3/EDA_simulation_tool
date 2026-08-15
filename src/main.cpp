@@ -7,9 +7,11 @@
 #include "IOController.hpp"
 #include "WaveformGUI.hpp"
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 static std::string stateToString(LogicState s) {
     switch (s) {
@@ -19,6 +21,24 @@ static std::string stateToString(LogicState s) {
         case LogicState::Z:    return "z";
         default:               return "?";
     }
+}
+
+static void printUsage(const char* prog_name) {
+    std::cout << "======================================================================\n";
+    std::cout << "            EDA SIMULATION ENGINE - USAGE GUIDE                       \n";
+    std::cout << "======================================================================\n";
+    std::cout << "Usage:\n";
+    std::cout << "  " << prog_name << " [options] [verilog_filepath]\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  " << prog_name << " simple_and_delay.v\n";
+    std::cout << "  " << prog_name << " comb_logic.v\n";
+    std::cout << "  " << prog_name << " full_adder.v --cli\n";
+    std::cout << "  " << prog_name << " --test\n\n";
+    std::cout << "Options:\n";
+    std::cout << "  -h, --help       Show this help message and exit\n";
+    std::cout << "  -i, --cli        Run in interactive Terminal CLI mode instead of GUI\n";
+    std::cout << "  --test           Run internal CLI unit verification test suite\n";
+    std::cout << "======================================================================\n";
 }
 
 static void runCliTestSuite(SimEngine& engine) {
@@ -54,7 +74,6 @@ static void runCliTestSuite(SimEngine& engine) {
     IOController::executeCommand("set in1 1 at 3", engine);
 
     std::cout << "----------------------------------------------------------------------\n\n";
-
 
     std::cout << "[VERIFYING WAVEFORM HISTORY AFTER CLI EXECUTION]\n";
     std::cout << std::left << std::setw(12) << "Timestamp" << std::setw(14) << "Wire" << "New State\n";
@@ -102,7 +121,10 @@ int main(int argc, char* argv[]) {
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--test") {
+        if (arg == "-h" || arg == "--help") {
+            printUsage(argv[0]);
+            return 0;
+        } else if (arg == "--test") {
             run_unit_test = true;
         } else if (arg == "--cli" || arg == "-i") {
             interactive_cli = true;
@@ -118,21 +140,31 @@ int main(int argc, char* argv[]) {
             "    assign out = in1 | in2;\n"
             "endmodule\n";
         parsed = VerilogParser::parseString(verilog_input);
-    } else if (!verilog_filepath.empty()) {
+    } else {
+        if (verilog_filepath.empty()) {
+            std::cout << "======================================================================\n";
+            std::cout << "        EDA SIMULATION ENGINE - DYNAMIC FILE SELECTION               \n";
+            std::cout << "======================================================================\n";
+            std::cout << "Enter Verilog file path (or press Enter for default 'simple_and_delay.v'): ";
+            std::string user_input;
+            if (std::getline(std::cin, user_input) && !user_input.empty()) {
+                // Trim whitespace
+                user_input.erase(0, user_input.find_first_not_of(" \t\r\n"));
+                user_input.erase(user_input.find_last_not_of(" \t\r\n") + 1);
+                if (!user_input.empty()) {
+                    verilog_filepath = user_input;
+                }
+            }
+            if (verilog_filepath.empty()) {
+                verilog_filepath = "simple_and_delay.v";
+            }
+        }
+
         try {
-            std::cout << "[INFO] Loading Verilog file: " << verilog_filepath << "\n";
+            std::cout << "[INFO] Loading Verilog file: '" << verilog_filepath << "'...\n";
             parsed = VerilogParser::parseFile(verilog_filepath);
         } catch (const std::exception& ex) {
-            std::cerr << "[ERROR] Failed to parse Verilog file '" << verilog_filepath << "': " << ex.what() << "\n";
-            return 1;
-        }
-    } else {
-        std::string default_file = "simple_and_delay.v";
-        try {
-            std::cout << "[INFO] No Verilog file specified. Loading default file '" << default_file << "'...\n";
-            parsed = VerilogParser::parseFile(default_file);
-        } catch (const std::exception& ex) {
-            std::cout << "[INFO] File load failed (" << ex.what() << "), using embedded string parsing...\n";
+            std::cout << "[INFO] File load failed (" << ex.what() << "), falling back to embedded sample module...\n";
             std::string verilog_input = 
                 "module simple_and_delay(input a, input b, output out1);\n"
                 "    and # (2) o1 (out1, a, b);\n"
@@ -154,7 +186,7 @@ int main(int argc, char* argv[]) {
         std::cout << "======================================================================\n";
         std::cout << "        EDA SIMULATION ENGINE INTERACTIVE CLI MODE                    \n";
         std::cout << "======================================================================\n";
-        std::cout << "Module: " << parsed.module_name << "\n";
+        std::cout << "Module : " << parsed.module_name << "\n";
         std::cout << "Inputs : ";
         for (const auto& pin : parsed.input_pins) std::cout << pin << " ";
         std::cout << "\nOutputs: ";
@@ -180,21 +212,37 @@ int main(int argc, char* argv[]) {
     std::cout << "Inputs : ";
     for (const auto& pin : parsed.input_pins) {
         std::cout << pin << " ";
+        // Initialize all input pins dynamically to ZERO at t=0
         IOController::executeCommand("set " + pin + " 0 at 0", engine);
     }
     std::cout << "\nOutputs: ";
     for (const auto& pin : parsed.output_pins) std::cout << pin << " ";
     std::cout << "\n----------------------------------------------------------------------\n";
-    std::cout << "[PRE-POPULATING PROPAGATION DELAY DEMO SEQUENCE (#2 delay)]\n";
-    IOController::executeCommand("set a 1 at 0", engine);
-    IOController::executeCommand("set b 1 at 0", engine);
-    IOController::executeCommand("run 5", engine);
-    IOController::executeCommand("set a 0 at 5", engine);
-    IOController::executeCommand("run 5", engine);
-    std::cout << "----------------------------------------------------------------------\n";
+
+    // Dynamic pre-population logic: only run demo if pins 'a' and 'b' exist
+    bool has_a = std::find(parsed.input_pins.begin(), parsed.input_pins.end(), "a") != parsed.input_pins.end();
+    bool has_b = std::find(parsed.input_pins.begin(), parsed.input_pins.end(), "b") != parsed.input_pins.end();
+
+    if (has_a && has_b) {
+        std::cout << "[PRE-POPULATING PROPAGATION DELAY DEMO SEQUENCE]\n";
+        IOController::executeCommand("set a 1 at 0", engine);
+        IOController::executeCommand("set b 1 at 0", engine);
+        IOController::executeCommand("run 5", engine);
+        IOController::executeCommand("set a 0 at 5", engine);
+        IOController::executeCommand("run 5", engine);
+        std::cout << "----------------------------------------------------------------------\n";
+    } else {
+        // General initial run for any loaded module
+        IOController::executeCommand("run 10", engine);
+    }
+
     std::cout << "[RUNTIME CONTROL INSTRUCTIONS]\n";
-    std::cout << "  Notice that 'out1' updates at t=2ns (after t=0ns inputs) and t=7ns (after t=5ns inputs)\n";
-    std::cout << "  due to the explicit #(2) gate delay!\n";
+    std::cout << "  Type commands directly using the GUI control box!\n";
+    std::cout << "  Example commands:\n";
+    for (const auto& pin : parsed.input_pins) {
+        std::cout << "    set " << pin << " 1 at 10\n";
+    }
+    std::cout << "    run 10\n";
     std::cout << "======================================================================\n\n";
 
     std::cout << "Launching EDA Waveform GUI...\n";
